@@ -15,6 +15,7 @@ permissions:
 
 jobs:
   goreleaser:
+    if: false  # Disabled - using release-dev workflow instead
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

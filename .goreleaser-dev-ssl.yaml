@@ -1,0 +1,207 @@
+# SPDX-FileCopyrightText: 2026 Dima Boger
+# SPDX-License-Identifier: MIT
+
+version: 2
+
+env:
+  - GO111MODULE=on
+  - CGO_ENABLED=0
+  - GITHUB_ORG={{ .Env.GITHUB_REPOSITORY_OWNER }}
+  - DOCKER_ORG=unused-for-ghcr-only
+  - DOCKERFILE=Dockerfile.goreleaser
+  - LATEST=dev
+
+before:
+  hooks:
+    - bun i --cwd ./web
+    - go mod tidy
+    - go install github.com/a-h/templ/cmd/templ@latest
+    - go generate ./...
+
+gomod:
+  proxy: false
+
+report_sizes: true
+
+release:
+  make_latest: false
+  mode: replace
+  prerelease: true
+  draft: true
+  replace_existing_draft: true
+  skip_upload: true
+
+builds:
+  - id: server
+    main: ./cmd/server/main.go
+    binary: tsdproxyd
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+      - arm
+    goarm:
+      - "6"
+      - "7"
+    ignore:
+      - goarch: arm
+        goos: windows
+      - goarch: arm64
+        goos: freebsd
+    flags:
+      - -tags=prod
+    ldflags:
+      - -s -w
+      - -X "github.com/almeidapaulopt/tsdproxy/internal/core.version={{ incpatch .Version }}-{{ .Env.LATEST  }}"
+      - -X "github.com/almeidapaulopt/tsdproxy/internal/core.BuildDate={{ .Date }}"
+      - -X "github.com/almeidapaulopt/tsdproxy/internal/core.GitCommit={{ .ShortCommit }}"
+      - -X "tailscale.com/version.Short={{ .Env.TAILSCALE_VERSION  }}"
+      - -X "tailscale.com/version.Long={{ .Env.TAILSCALE_VERSION  }}-TSDProxy"
+      - -X "tailscale.com/version.GitCommit={{ .ShortCommit }}"
+      - -X "tailscale.com/version.shortStamp={{ .Env.TAILSCALE_VERSION  }}"
+      - -X "tailscale.com/version.longStamp={{ .Env.TAILSCALE_VERSION  }}-TSDProxy"
+      - -X "tailscale.com/version.gitCommitStamp={{ .ShortCommit }}"
+
+  - id: healthcheck
+    main: ./cmd/healthcheck/main.go
+    binary: healthcheck
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+      - arm
+    goarm:
+      - "6"
+      - "7"
+    ignore:
+      - goarch: arm
+        goos: windows
+      - goarch: arm64
+        goos: freebsd
+
+universal_binaries:
+  - replace: false
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  disable: true
+
+archives:
+  - formats: tar.gz
+    files:
+      - README.md
+      - LICENSE
+    allow_different_binary_count: true
+
+dockers:
+  - use: buildx
+    goos: linux
+    goarch: amd64
+    dockerfile: "{{ .Env.DOCKERFILE }}"
+    image_templates:
+      - "ghcr.io/{{ .Env.GITHUB_ORG }}/{{ .ProjectName }}-ssl:{{ .Env.LATEST }}-amd64"
+    build_flag_templates:
+      - "--pull"
+      - '--label=io.artifacthub.package.maintainers=[{"name":"Paulo Almeida","email":"almeidapaulopt@gmail.com"}]'
+      - "--label=io.artifacthub.package.license=MIT"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.name={{.ProjectName}}-ssl"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{ incpatch .Version }}-{{ .Env.LATEST}}"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}-ssl"
+      - "--label=org.opencontainers.image.description={{ .ProjectName }}-ssl"
+      - "--label=org.opencontainers.image.url=https://github.com/{{ .Env.GITHUB_ORG }}/{{ .ProjectName }}"
+      - "--label=org.opencontainers.image.source=https://github.com/{{ .Env.GITHUB_ORG }}/{{ .ProjectName }}"
+      - "--label=org.opencontainers.image.version={{incpatch .Version }}-{{ .Env.LATEST }}"
+      - "--platform=linux/amd64"
+  - use: buildx
+    goos: linux
+    goarch: arm64
+    dockerfile: "{{ .Env.DOCKERFILE }}"
+    image_templates:
+      - "ghcr.io/{{ .Env.GITHUB_ORG }}/{{ .ProjectName }}-ssl:{{ .Env.LATEST }}-arm64v8"
+    build_flag_templates:
+      - "--pull"
+      - '--label=io.artifacthub.package.maintainers=[{"name":"Paulo Almeida","email":"almeidapaulopt@gmail.com"}]'
+      - "--label=io.artifacthub.package.license=MIT"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.name={{.ProjectName}}-ssl"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{ incpatch .Version }}-{{ .Env.LATEST}}"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}-ssl"
+      - "--label=org.opencontainers.image.description={{ .ProjectName }}-ssl"
+      - "--label=org.opencontainers.image.url=https://github.com/{{ .Env.GITHUB_ORG }}/{{ .ProjectName }}"
+      - "--label=org.opencontainers.image.source=https://github.com/{{ .Env.GITHUB_ORG }}/{{ .ProjectName }}"
+      - "--label=org.opencontainers.image.version={{incpatch .Version }}-{{ .Env.LATEST }}"
+      - "--platform=linux/arm64/v8"
+  - use: buildx
+    goos: linux
+    goarch: arm
+    goarm: 6
+    dockerfile: "{{ .Env.DOCKERFILE }}"
+    image_templates:
+      - "ghcr.io/{{ .Env.GITHUB_ORG }}/{{ .ProjectName }}-ssl:{{ .Env.LATEST }}-armv6"
+    build_flag_templates:
+      - "--pull"
+      - '--label=io.artifacthub.package.maintainers=[{"name":"Paulo Almeida","email":"almeidapaulopt@gmail.com"}]'
+      - "--label=io.artifacthub.package.license=MIT"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.name={{.ProjectName}}-ssl"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{ incpatch .Version }}-{{ .Env.LATEST}}"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}-ssl"
+      - "--label=org.opencontainers.image.description={{ .ProjectName }}-ssl"
+      - "--label=org.opencontainers.image.url=https://github.com/{{ .Env.GITHUB_ORG }}/{{ .ProjectName }}"
+      - "--label=org.opencontainers.image.source=https://github.com/{{ .Env.GITHUB_ORG }}/{{ .ProjectName }}"
+      - "--label=org.opencontainers.image.version={{incpatch .Version }}-{{ .Env.LATEST }}"
+      - "--platform=linux/arm/v6"
+  - use: buildx
+    goos: linux
+    goarch: arm
+    goarm: 7
+    dockerfile: "{{ .Env.DOCKERFILE }}"
+    image_templates:
+      - "ghcr.io/{{ .Env.GITHUB_ORG }}/{{ .ProjectName }}-ssl:{{ .Env.LATEST }}-armv7"
+    build_flag_templates:
+      - "--pull"
+      - '--label=io.artifacthub.package.maintainers=[{"name":"Paulo Almeida","email":"almeidapaulopt@gmail.com"}]'
+      - "--label=io.artifacthub.package.license=MIT"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.name={{.ProjectName}}-ssl"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{ incpatch .Version }}-{{ .Env.LATEST}}"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}-ssl"
+      - "--label=org.opencontainers.image.description={{ .ProjectName }}-ssl"
+      - "--label=org.opencontainers.image.url=https://github.com/{{ .Env.GITHUB_ORG }}/{{ .ProjectName }}"
+      - "--label=org.opencontainers.image.source=https://github.com/{{ .Env.GITHUB_ORG }}/{{ .ProjectName }}"
+      - "--label=org.opencontainers.image.version={{incpatch .Version }}-{{ .Env.LATEST }}"
+      - "--platform=linux/arm/v7"
+
+docker_manifests:
+  - name_template: "ghcr.io/{{ .Env.GITHUB_ORG }}/{{ .ProjectName }}-ssl:{{ .Env.LATEST }}"
+    image_templates:
+      - ghcr.io/{{ .Env.GITHUB_ORG }}/{{ .ProjectName }}-ssl:{{ .Env.LATEST }}-amd64
+      - ghcr.io/{{ .Env.GITHUB_ORG }}/{{ .ProjectName }}-ssl:{{ .Env.LATEST }}-arm64v8
+      - ghcr.io/{{ .Env.GITHUB_ORG }}/{{ .ProjectName }}-ssl:{{ .Env.LATEST }}-armv6
+      - ghcr.io/{{ .Env.GITHUB_ORG }}/{{ .ProjectName }}-ssl:{{ .Env.LATEST }}-armv7
+
+docker_signs:
+  - cmd: cosign
+    artifacts: manifests
+    output: true
+    args:
+      - "sign"
+      - "${artifact}@${digest}"
+      - --yes

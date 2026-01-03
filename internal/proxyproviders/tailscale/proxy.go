@@ -5,6 +5,7 @@ package tailscale
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"net"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/almeidapaulopt/tsdproxy/internal/model"
 	"github.com/almeidapaulopt/tsdproxy/internal/proxyproviders"
+	"github.com/almeidapaulopt/tsdproxy/internal/ssl"
 
 	"github.com/rs/zerolog"
 	"tailscale.com/client/local"
@@ -35,7 +37,8 @@ type Proxy struct {
 	url     string
 	status  model.ProxyStatus
 
-	mtx sync.Mutex
+	mtx        sync.Mutex
+	sslManager *ssl.Manager
 }
 
 var (
@@ -76,6 +79,11 @@ func (p *Proxy) GetURL() string {
 
 // Close method implements proxyconfig.Proxy Close method.
 func (p *Proxy) Close() error {
+	if p.sslManager != nil {
+		if err := p.sslManager.Close(); err != nil {
+			p.log.Warn().Err(err).Msg("failed to close SSL manager")
+		}
+	}
 	if p.tsServer != nil {
 		return p.tsServer.Close()
 	}
@@ -99,6 +107,16 @@ func (p *Proxy) GetListener(port string) (net.Listener, error) {
 		return p.tsServer.ListenFunnel(network, addr)
 	}
 	if portCfg.ProxyProtocol == "https" {
+		// Check if custom SSL is enabled
+		if p.sslManager != nil {
+			// Use raw TCP listener + custom TLS wrapper
+			listener, err := p.tsServer.Listen(network, addr)
+			if err != nil {
+				return nil, err
+			}
+			return tls.NewListener(listener, p.sslManager.GetTLSConfig()), nil
+		}
+		// Fall back to Tailscale's automatic certificates
 		return p.tsServer.ListenTLS(network, addr)
 	}
 	return p.tsServer.Listen(network, addr)

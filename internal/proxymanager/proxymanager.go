@@ -206,7 +206,7 @@ func (pm *ProxyManager) addProxyProviders() {
 	pm.log.Debug().Msg("Setting up Tailscale Providers")
 	// add Tailscale Providers
 	for name, provider := range config.Config.Tailscale.Providers {
-		if p, err := tailscale.New(pm.log, name, provider); err != nil {
+		if p, err := tailscale.New(pm.log, name, provider, config.Config.Tailscale.SSL); err != nil {
 			pm.log.Error().Err(err).Msg("Error creating Tailscale provider")
 		} else {
 			pm.log.Debug().Str("provider", name).Msg("Created Proxy provider")

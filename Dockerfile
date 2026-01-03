@@ -1,23 +1,41 @@
+# Build web assets
+FROM oven/bun:1 AS web-builder
+WORKDIR /app/web
+COPY web/package.json web/bun.lock ./
+RUN bun install --frozen-lockfile
+COPY web/ ./
+RUN bun run build
 
-# Usa uma imagem oficial do Go como base para a compilação
+# Build Go application
 FROM golang:1.24 AS builder
 RUN apk add --no-cache ca-certificates && update-ca-certificates 2>/dev/null || true
 
-# Define o diretório de trabalho
 WORKDIR /app
 
-# Copia o código fonte para o container
+# Install templ for template generation
+RUN go install github.com/a-h/templ/cmd/templ@latest
+
+# Copy go mod files and download dependencies
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source code
 COPY . .
 
-# Compila a aplicação Go
-RUN go mod tidy && CGO_ENABLED=0 GOOS=linux go build -o /tsdproxyd ./cmd/server/main.go
+# Copy built web assets from web-builder
+COPY --from=web-builder /app/web/dist ./web/dist
+
+# Generate templ files
+RUN templ generate
+
+# Build Go binaries
+RUN CGO_ENABLED=0 GOOS=linux go build -o /tsdproxyd ./cmd/server/main.go
 RUN CGO_ENABLED=0 GOOS=linux go build -o /healthcheck ./cmd/healthcheck/main.go
 
-
+# Final stage
 FROM scratch
 
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-
 COPY --from=builder /tsdproxyd /tsdproxyd
 COPY --from=builder /healthcheck /healthcheck
 

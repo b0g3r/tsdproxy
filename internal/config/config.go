@@ -54,6 +54,15 @@ type (
 	TailscaleProxyProviderConfig struct {
 		Providers map[string]*TailscaleServerConfig `validate:"dive,required" yaml:"providers"`
 		DataDir   string                            `validate:"dir" default:"/data/" yaml:"dataDir"`
+		SSL       SSLConfig                         `yaml:"ssl"`
+	}
+
+	// SSLConfig struct stores custom SSL certificate configuration
+	SSLConfig struct {
+		Enabled       bool   `validate:"boolean" default:"false" yaml:"enabled"`
+		CertFile      string `validate:"omitempty" yaml:"certFile,omitempty"`
+		KeyFile       string `validate:"omitempty" yaml:"keyFile,omitempty"`
+		WatchRenewals bool   `validate:"boolean" default:"true" yaml:"watchRenewals"`
 	}
 
 	// TailscaleServerConfig struct stores Tailscale Server configuration

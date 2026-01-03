@@ -5,6 +5,7 @@ package tailscale
 
 import (
 	"context"
+	"fmt"
 	"path"
 	"path/filepath"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"github.com/almeidapaulopt/tsdproxy/internal/config"
 	"github.com/almeidapaulopt/tsdproxy/internal/model"
 	"github.com/almeidapaulopt/tsdproxy/internal/proxyproviders"
+	"github.com/almeidapaulopt/tsdproxy/internal/ssl"
 
 	"github.com/rs/zerolog"
 	"tailscale.com/client/tailscale/v2"
@@ -30,6 +32,7 @@ type (
 		controlURL   string
 		datadir      string
 		tags         string
+		sslConfig    config.SSLConfig
 	}
 
 	oauth struct {
@@ -39,7 +42,7 @@ type (
 
 var _ proxyproviders.Provider = (*Client)(nil)
 
-func New(log zerolog.Logger, name string, provider *config.TailscaleServerConfig) (*Client, error) {
+func New(log zerolog.Logger, name string, provider *config.TailscaleServerConfig, sslConfig config.SSLConfig) (*Client, error) {
 	datadir := filepath.Join(config.Config.Tailscale.DataDir, name)
 
 	return &Client{
@@ -51,6 +54,7 @@ func New(log zerolog.Logger, name string, provider *config.TailscaleServerConfig
 		tags:         strings.TrimSpace(provider.Tags),
 		datadir:      datadir,
 		controlURL:   provider.ControlURL,
+		sslConfig:    sslConfig,
 	}, nil
 }
 
@@ -88,12 +92,34 @@ func (c *Client) NewProxy(config *model.Config) (proxyproviders.ProxyInterface, 
 		}
 	}
 
-	return &Proxy{
+	proxy := &Proxy{
 		log:      log,
 		config:   config,
 		tsServer: tserver,
 		events:   make(chan model.ProxyEvent),
-	}, nil
+	}
+
+	// Initialize SSL manager if custom SSL is enabled
+	if c.sslConfig.Enabled {
+		sslManager, err := ssl.NewManager(c.sslConfig, log)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize SSL manager: %w", err)
+		}
+
+		if err := sslManager.Load(); err != nil {
+			return nil, fmt.Errorf("failed to load SSL certificates: %w", err)
+		}
+
+		if c.sslConfig.WatchRenewals {
+			if err := sslManager.Watch(); err != nil {
+				log.Warn().Err(err).Msg("failed to watch SSL certificates for renewals")
+			}
+		}
+
+		proxy.sslManager = sslManager
+	}
+
+	return proxy, nil
 }
 
 // getControlURL method returns the control URL
