@@ -1,4 +1,7 @@
-# TsDProxy - Tailscale Proxy
+# TsDProxy - Tailscale Proxy with SSL
+
+It is a fork of original tsdproxy, but with support of provided SSL certificates, e.g. wildcard. 
+Very useful for a case of self-hosted tailscale control plane, like headscale.
 
 TsDProxy simplifies the process of securely exposing services and Docker containers
 to your Tailscale network by automatically creating Tailscale machines for each
