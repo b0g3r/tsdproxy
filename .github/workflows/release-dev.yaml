@@ -51,7 +51,7 @@ jobs:
         with:
           distribution: goreleaser
           version: "~> v2"
-          args: release -f .goreleaser-dev-ssl.yaml --snapshot --skip validate --clean
+          args: release -f .goreleaser-dev-ssl.yaml --skip validate --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
